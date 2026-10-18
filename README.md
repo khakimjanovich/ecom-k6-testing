@@ -7,7 +7,7 @@ Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/eco
 | `smoke/` | the app is up and healthy |
 | `partner/` | partner reads stay fast under load |
 | `registration/` | sign-up, code by email (read from Mailpit), verification |
-| `lifecycle/` | admins verify, sign the contract, activate, suspend, restore, terminate; history and refused moves |
+| `lifecycle/` | admins verify, sign the contract, activate with four eyes, suspend, restore, terminate; history and refused moves |
 
 ```bash
 ./run.sh smoke/health.js

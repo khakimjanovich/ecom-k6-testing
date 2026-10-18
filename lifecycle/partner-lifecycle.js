@@ -1,4 +1,5 @@
 // A registered merchant goes through the whole lifecycle, driven by bank admins.
+// Activation needs four eyes: aziz asks, malika approves.
 import http from 'k6/http';
 import { check } from 'k6';
 import { BASE_URL } from '../lib/config.js';
@@ -22,6 +23,13 @@ function admin(path, adminId, body) {
   });
 }
 
+function decide(rid, action, adminId) {
+  return http.post(`${BASE_URL}/api/v1/admin/activation-requests/${rid}/${action}`, null, {
+    headers: { 'X-Admin-Id': adminId },
+    tags: { name: 'admin' },
+  });
+}
+
 const movedTo = (status) => (r) => r.status === 200 && r.json('status') === status;
 
 export default function () {
@@ -34,10 +42,16 @@ export default function () {
 
   http.post(`${BASE_URL}/api/v1/registrations/email-verification`, JSON.stringify({ email, code: latestCode(email) }), { headers: JSON_HEADERS });
 
-  check(admin(`${id}/activate`, 'aziz'), { 'cannot skip to active (409)': (r) => r.status === 409 && r.json('code') === 'PARTNER_INVALID_TRANSITION' });
+  check(admin(`${id}/activation-requests`, 'aziz'), { 'cannot ask before approval (409)': (r) => r.status === 409 && r.json('code') === 'PARTNER_INVALID_TRANSITION' });
   check(admin(`${id}/verify`, 'aziz'), { 'verified, waiting for contract': movedTo('WAITING_CONTRACT') });
   check(admin(`${id}/contract`, 'aziz', { contractNumber: `HP-${id}` }), { 'contract approves': (r) => movedTo('APPROVED')(r) && r.json('contractNumber') === `HP-${id}` });
-  check(admin(`${id}/activate`, 'aziz'), { active: movedTo('ACTIVE') });
+  const asked = admin(`${id}/activation-requests`, 'aziz');
+  check(asked, { 'activation requested (201)': (r) => r.status === 201 && r.json('status') === 'PENDING' });
+  check(admin(`${id}/activation-requests`, 'bekzod'), { 'one waiting request (409)': (r) => r.status === 409 && r.json('code') === 'ACTIVATION_REQUEST_PENDING' });
+  const rid = asked.json('id');
+  check(decide(rid, 'approve', 'aziz'), { 'no self-approval (409)': (r) => r.status === 409 && r.json('code') === 'SELF_APPROVAL' });
+  check(decide(rid, 'approve', 'malika'), { 'second admin approves': (r) => r.status === 200 && r.json('status') === 'APPROVED' });
+  check(http.get(`${BASE_URL}/api/v1/partners/${id}`), { active: (r) => r.json('status') === 'ACTIVE' });
   check(admin(`${id}/suspend`, 'malika', { reason: 'Chargebacks above limit' }), { suspended: movedTo('SUSPENDED') });
   check(admin(`${id}/restore`, 'malika'), { restored: movedTo('ACTIVE') });
   check(admin(`${id}/terminate`, 'malika', { reason: 'Contract ended' }), { terminated: movedTo('TERMINATED') });

@@ -8,6 +8,7 @@ Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/eco
 | `partner/` | admin reads stay fast under load; a partner's API clients log in and rotate secrets |
 | `registration/` | sign-up, code by email (read from Mailpit), verification |
 | `sales-points/` | websites: foreign return URLs refused, site check, terms, activation only after a passed check, suspend and restore |
+| `commission/` | two admins agree on fee rules (no self-approval, no overlaps); fast quotes where the sales point rule wins; a fee taking everything is refused |
 | `lifecycle/` | admins verify, sign the contract, activate with four eyes, suspend, restore, terminate; history and refused moves |
 
 ```bash
@@ -17,6 +18,7 @@ Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/eco
 ./run.sh registration/register-and-verify.js
 ./run.sh lifecycle/partner-lifecycle.js
 ./run.sh sales-points/site-check-and-activate.js
+./run.sh commission/rules-and-quotes.js
 ```
 
 Admin calls use Keycloak tokens for `aziz` and `malika` (local password from `ADMIN_PASSWORD`, default `local-only`).

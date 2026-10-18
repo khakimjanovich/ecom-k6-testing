@@ -1,0 +1,13 @@
+.gradle/
+build/
+bin/
+out/
+# IDE state (Eclipse/VS Code Java, IntelliJ)
+.settings/
+.project
+.classpath
+.factorypath
+.vscode/
+.idea/
+*.iml
+.DS_Store

@@ -1,11 +1,11 @@
-# acquiring-load-tests
+# ecom-k6-testing
 
-Grafana k6 scenarios for `acquiring-backend` (Series B). Every episode that adds an endpoint adds a scenario here.
+Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/ecom). Every new endpoint gets a scenario here.
 
 | Folder | What it proves |
 |---|---|
 | `smoke/` | the app is up and healthy |
-| `partner/` | partner reads stay fast under load (episode 03) |
+| `partner/` | partner reads stay fast under load |
 
 ```bash
 ./run.sh smoke/health.js
@@ -13,4 +13,4 @@ Grafana k6 scenarios for `acquiring-backend` (Series B). Every episode that adds
 ```
 
 Each script has thresholds: a run fails if latency or error rate goes past them.
-From episode 17, results also go to Prometheus and Grafana next to the app's own metrics.
+Once the observability stack is in place, results also go to Prometheus and Grafana next to the app's own metrics.

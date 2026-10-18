@@ -1,4 +1,4 @@
-// Episode 03: read one partner under load. A missing partner must answer 404 fast, never 500.
+// Read one partner under load. A missing partner must answer 404 fast, never 500.
 import http from 'k6/http';
 import { check } from 'k6';
 import { BASE_URL } from '../lib/config.js';

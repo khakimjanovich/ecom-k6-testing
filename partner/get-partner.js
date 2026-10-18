@@ -1,7 +1,8 @@
-// Read one partner under load. A missing partner must answer 404 fast, never 500.
+// An admin reads one partner under load. A missing partner must answer 404 fast, never 500.
 import http from 'k6/http';
 import { check } from 'k6';
-import { BASE_URL } from '../lib/config.js';
+import { ADMIN_PASSWORD, BASE_URL } from '../lib/config.js';
+import { bearer, login } from '../lib/auth.js';
 
 export const options = {
   stages: [
@@ -17,7 +18,11 @@ export const options = {
 
 const MISSING = '00000000-0000-0000-0000-000000000000';
 
-export default function () {
-  const res = http.get(`${BASE_URL}/api/v1/partners/${__ENV.PARTNER_ID || MISSING}`);
-  check(res, { 'no server errors': (r) => r.status < 500 });
+export function setup() {
+  return login('aziz', ADMIN_PASSWORD);
+}
+
+export default function (token) {
+  const res = http.get(`${BASE_URL}/api/v1/partners/${__ENV.PARTNER_ID || MISSING}`, { headers: bearer(token) });
+  check(res, { 'no server errors': (r) => r.status < 500, 'admin is let in': (r) => r.status !== 401 && r.status !== 403 });
 }

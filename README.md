@@ -5,15 +5,18 @@ Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/eco
 | Folder | What it proves |
 |---|---|
 | `smoke/` | the app is up and healthy |
-| `partner/` | partner reads stay fast under load |
+| `partner/` | admin reads stay fast under load; a partner's API clients log in and rotate secrets |
 | `registration/` | sign-up, code by email (read from Mailpit), verification |
 | `lifecycle/` | admins verify, sign the contract, activate with four eyes, suspend, restore, terminate; history and refused moves |
 
 ```bash
 ./run.sh smoke/health.js
 ./run.sh partner/get-partner.js
+./run.sh partner/api-client.js
 ./run.sh registration/register-and-verify.js
+./run.sh lifecycle/partner-lifecycle.js
 ```
 
+Admin calls use Keycloak tokens for `aziz` and `malika` (local password from `ADMIN_PASSWORD`, default `local-only`).
 Each script has thresholds: a run fails if latency or error rate goes past them.
 Once the observability stack is in place, results also go to Prometheus and Grafana next to the app's own metrics.

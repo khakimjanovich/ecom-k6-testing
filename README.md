@@ -12,7 +12,7 @@ Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/eco
 | `sales-points/` | websites: foreign return URLs refused, site check, terms, activation only after a passed check, suspend and restore |
 | `commission/` | two admins agree on fee rules (no self-approval, no overlaps); fast quotes where the sales point rule wins; a fee taking everything is refused |
 | `terminals/` | terminals per website and card: one live route, suspend means no route, revoked MID/TID never reused, every change audited |
-| `payments/` | signed payment requests: created once per Idempotency-Key, replays, old timestamps, forged signatures and reused keys refused; the payment page: card, code and the debit (paid with the fee fixed, declined stays declined), wrong codes counted until the page closes |
+| `payments/` | signed payment requests: created once per Idempotency-Key, replays, old timestamps, forged signatures and reused keys refused; the payment page: card, code and the debit (paid with the fee fixed, declined stays declined), wrong codes counted until the page closes; a scheme that doesn't answer: unknown, then settled by the resolution workflow (`silent-scheme.js`, needs Temporal) |
 | `cards/` | BIN registry: sync from both schemes, lookup by first digits with the issuing bank, unknown BINs refused; card search never returns a number |
 | `lifecycle/` | admins verify, sign the contract, activate with four eyes, suspend, restore, terminate; history and refused moves |
 

@@ -9,7 +9,7 @@ export const options = {
   vus: 5,
   duration: '30s',
   thresholds: {
-    'http_req_duration{name:bin-lookup}': ['p(95)<100'],
+    'http_req_duration{name:bin-lookup}': ['p(95)<85'],
     checks: ['rate>0.99'],
   },
 };

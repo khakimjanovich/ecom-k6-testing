@@ -9,7 +9,7 @@ export const options = {
   vus: 3,
   duration: '30s',
   thresholds: {
-    'http_req_duration{name:sales-points}': ['p(95)<300'],
+    'http_req_duration{name:sales-points}': ['p(95)<10'],
     checks: ['rate>0.99'],
   },
 };

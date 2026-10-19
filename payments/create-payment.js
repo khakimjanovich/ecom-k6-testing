@@ -8,7 +8,7 @@ export const options = {
   vus: 5,
   duration: '30s',
   thresholds: {
-    'http_req_duration{name:create-payment}': ['p(95)<200'],
+    'http_req_duration{name:create-payment}': ['p(95)<50'],
     checks: ['rate>0.99'],
   },
 };

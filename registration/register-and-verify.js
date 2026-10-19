@@ -8,8 +8,8 @@ export const options = {
   vus: 5,
   duration: '30s',
   thresholds: {
-    'http_req_duration{name:register}': ['p(95)<300'],
-    'http_req_duration{name:verify}': ['p(95)<300'],
+    'http_req_duration{name:register}': ['p(95)<50'],
+    'http_req_duration{name:verify}': ['p(95)<25'],
     checks: ['rate>0.99'],
   },
 };

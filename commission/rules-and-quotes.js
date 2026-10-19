@@ -8,8 +8,8 @@ export const options = {
   vus: 4,
   duration: '30s',
   thresholds: {
-    'http_req_duration{name:quote}': ['p(95)<50'],
-    'http_req_duration{name:rules}': ['p(95)<300'],
+    'http_req_duration{name:quote}': ['p(95)<10'],
+    'http_req_duration{name:rules}': ['p(95)<10'],
     checks: ['rate>0.99'],
   },
 };

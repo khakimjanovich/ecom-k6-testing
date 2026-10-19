@@ -11,7 +11,7 @@ export const options = {
   vus: VUS,
   duration: '30s',
   thresholds: {
-    'http_req_duration{name:terminals}': ['p(95)<200'],
+    'http_req_duration{name:terminals}': ['p(95)<10'],
     checks: ['rate>0.99'],
   },
 };

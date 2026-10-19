@@ -9,7 +9,7 @@ export const options = {
   vus: 5,
   duration: '30s',
   thresholds: {
-    'http_req_duration{name:bin-lookup}': ['p(95)<85'],
+    'http_req_duration{name:bin-lookup}': ['p(95)<10'],
     checks: ['rate>0.99'],
   },
 };
@@ -30,9 +30,11 @@ export function setup() {
 
 export default function ({ aziz }) {
   const lookup = (digits) => call('GET', `/api/v1/admin/bins/lookup?digits=${digits}`, aziz, null, 'bin-lookup');
-  check(lookup('86001402'), { 'Uzcard by BIN': (r) => r.status === 200 && r.json('scheme') === 'UZCARD' });
+  check(lookup('86001402'), {
+    'Uzcard by BIN, with its bank': (r) => r.status === 200 && r.json('scheme') === 'UZCARD' && r.json('bankName') === 'Asaka Bank',
+  });
   check(lookup('98600901'), { 'Humo by BIN': (r) => r.status === 200 && r.json('scheme') === 'HUMO' });
-  check(lookup('41111111'), { 'unknown BIN (404)': (r) => r.status === 404 && r.json('code') === 'CARD_BIN_NOT_FOUND' });
+  check(lookup('41111111'), { 'unknown BIN (404)': (r) => r.status === 404 && r.json('code') === 'BIN_NOT_FOUND' });
 
   check(call('POST', '/api/v1/admin/cards/search', aziz, { number: '8600140200000033' }, 'cards', 'ru'), {
     'no such card, in Russian (404)': (r) => r.status === 404 && r.json('code') === 'CARD_NOT_FOUND' && r.json('detail') === 'Такой карты нет.',

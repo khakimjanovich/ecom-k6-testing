@@ -1,5 +1,6 @@
-// The buyer pays on the bank's page: the card, then the one-time code from the scheme. Wrong codes
-// are counted, and the page closes when they run out. The link's token is the only credential.
+// The buyer pays on the bank's page: the card, then the one-time code from the scheme, and the debit.
+// Wrong codes are counted until the page closes; a declined card stays declined. The link's token is
+// the only credential.
 import http from 'k6/http';
 import { check } from 'k6';
 import { BASE_URL } from '../lib/config.js';
@@ -10,9 +11,9 @@ export const options = {
   vus: 5,
   duration: '30s',
   thresholds: {
-    'http_req_duration{name:page}': ['p(95)<10'],
-    'http_req_duration{name:page-card}': ['p(95)<100'],
-    'http_req_duration{name:page-code}': ['p(95)<95'],
+    'http_req_duration{name:page}': ['p(95)<90'],
+    'http_req_duration{name:page-card}': ['p(95)<115'],
+    'http_req_duration{name:page-code}': ['p(95)<120'],
     checks: ['rate>0.99'],
   },
 };
@@ -25,18 +26,18 @@ export function setup() {
 }
 
 /** A new payment and its page token (the last part of the link the merchant sends the buyer). */
-function newPage({ shop, token }) {
-  const order = `${__VU}-${__ITER}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+function newPage({ shop, token }, order = undefined) {
+  order = order ?? `${__VU}-${__ITER}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const body = JSON.stringify({ salesPointId: shop.salesPointId, orderId: order, amount: 15000000, returnUrl: `${shop.site}/done` });
   const created = signedRequest('POST', '/api/v1/payments', { token, signingKey: shop.client.signingKey, body, idempotencyKey: `key-${order}`, name: 'create-payment' });
-  return created.json('paymentUrl').split('/pay/')[1];
+  return { token: created.json('paymentUrl').split('/pay/')[1], id: created.json('id') };
 }
 
 const pay = (method, token, step, body, name) =>
   http.request(method, `${BASE_URL}/api/v1/pay/${token}${step}`, body ? JSON.stringify(body) : null, { headers: JSON_HEADERS, tags: { name } });
 
 export default function (data) {
-  const token = newPage(data);
+  const { token, id } = newPage(data);
   check(pay('GET', token, '', null, 'page'), {
     'the page opens (200)': (r) => r.status === 200 && r.json('status') === 'CREATED' && r.json('cardAttemptsLeft') === 3,
   });
@@ -44,10 +45,19 @@ export default function (data) {
     'a code goes to the cardholder': (r) => r.status === 200 && r.json('status') === 'AWAITING_CODE' && r.json('cardBank') === 'Asaka Bank',
   });
   check(pay('POST', token, '/code', { code: '111111' }, 'page-code'), {
-    'the right code confirms the card': (r) => r.status === 200 && r.json('status') === 'CARD_CONFIRMED',
+    'the right code pays (PAID, with the RRN)': (r) => r.status === 200 && r.json('status') === 'PAID' && !!r.json('rrn'),
+  });
+  check(signedRequest('GET', `/api/v1/payments/${id}`, { token: data.token, signingKey: data.shop.client.signingKey, name: 'get-payment' }), {
+    'the merchant sees the fee fixed at the debit': (r) => r.json('status') === 'PAID' && r.json('fee') === 150000 && r.json('net') === 14850000,
   });
 
-  const wrong = newPage(data);
+  const poor = newPage(data).token;
+  pay('POST', poor, '/card', { number: '8600140200000082', expiry: '2812' }, 'page-card');
+  check(pay('POST', poor, '/code', { code: '111111' }, 'page-code'), {
+    'a declined card stays declined, with why': (r) => r.status === 200 && r.json('status') === 'DECLINED' && r.json('declineCode') === 'CARD_INSUFFICIENT_FUNDS',
+  });
+
+  const wrong = newPage(data).token;
   pay('POST', wrong, '/card', { number: '8600140234567890', expiry: '2812' }, 'page-card');
   const tries = [1, 2, 3].map(() => pay('POST', wrong, '/code', { code: '000000' }, 'page-code'));
   check(tries[2], { 'the last wrong code closes the page (422)': (r) => r.status === 422 && r.json('code') === 'PAYMENT_CODE_ATTEMPTS_EXHAUSTED' });

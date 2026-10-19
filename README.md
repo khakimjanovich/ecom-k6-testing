@@ -12,7 +12,7 @@ Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/eco
 | `sales-points/` | websites: foreign return URLs refused, site check, terms, activation only after a passed check, suspend and restore |
 | `commission/` | two admins agree on fee rules (no self-approval, no overlaps); fast quotes where the sales point rule wins; a fee taking everything is refused |
 | `terminals/` | terminals per website and card: one live route, suspend means no route, revoked MID/TID never reused, every change audited |
-| `payments/` | signed payment requests: created once per Idempotency-Key, replays, old timestamps, forged signatures and reused keys refused |
+| `payments/` | signed payment requests: created once per Idempotency-Key, replays, old timestamps, forged signatures and reused keys refused; the payment page: card, code, wrong codes counted until the page closes |
 | `cards/` | BIN registry: sync from both schemes, lookup by first digits with the issuing bank, unknown BINs refused; card search never returns a number |
 | `lifecycle/` | admins verify, sign the contract, activate with four eyes, suspend, restore, terminate; history and refused moves |
 
@@ -51,5 +51,6 @@ Measured 2026-10-19 on ecom-infra's load stack (the app at 1 CPU and 2 GB RAM; t
 | `terminals/register-and-route.js` | terminals | 2.3 ms | 10 ms | 174 iterations/s |
 | `cards/bins-and-vault.js` | BIN lookup (answered from memory) | 2.6 ms | 10 ms | 30 iterations/s |
 | `payments/create-payment.js` | create payment | 39.5 ms | 50 ms | 136 payments/s |
+| `payments/hosted-page.js` | page / card / code (card and code call the scheme through its adapter) | 2.6 / 77.8 / 72.5 ms | 10 / 100 / 95 ms | 17 iterations/s (two payments each) |
 
 On one CPU the JVM's own threads (garbage collection, JIT) compete with requests, so some p95s are bimodal: most requests take 2–4 ms, and a few wait for the next CPU time slice (~70 ms). A cold app right after start is slower until hot code is compiled, so warm it up (e.g. `smoke/health.js`) before measuring.

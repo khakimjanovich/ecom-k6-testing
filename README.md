@@ -12,7 +12,7 @@ Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/eco
 | `sales-points/` | websites: foreign return URLs refused, site check, terms, activation only after a passed check, suspend and restore |
 | `commission/` | two admins agree on fee rules (no self-approval, no overlaps); fast quotes where the sales point rule wins; a fee taking everything is refused |
 | `terminals/` | terminals per website and card: one live route, suspend means no route, revoked MID/TID never reused, every change audited |
-| `payments/` | signed payment requests: created once per Idempotency-Key, replays, old timestamps, forged signatures and reused keys refused; the payment page: card, code and the debit (paid with the fee fixed, declined stays declined), wrong codes counted until the page closes; a scheme that doesn't answer: unknown, then settled by the resolution workflow (`silent-scheme.js`, needs Temporal); every finished payment reaches the website's webhook, signed, and a webhook URL off the website is refused (`webhooks.js`, needs Kafka); payment links made in the portal, paid on the same page, only by their owner and only as long as the bank allows (`links.js`); money given back, reversed on the day of payment and only once (`returns.js`); daily reports and the CSV behind a day (`reports.js`) |
+| `payments/` | signed payment requests: created once per Idempotency-Key, replays, old timestamps, forged signatures and reused keys refused; the payment page: card, code and the debit (paid with the fee fixed, declined stays declined), wrong codes counted until the page closes; a scheme that doesn't answer: unknown, then settled by the resolution workflow (`silent-scheme.js`, needs Temporal); every finished payment reaches the website's webhook, signed, and a webhook URL off the website is refused (`webhooks.js`, needs Kafka); payment links made in the portal, paid on the same page, only by their owner and only as long as the bank allows (`links.js`); money given back, reversed on the day of payment and only once (`returns.js`); daily reports and the CSV behind a day (`reports.js`); a website's limits: one payment over it refused, racing buyers never past the daily limit (`limits.js`) |
 | `cards/` | BIN registry: sync from both schemes, lookup by first digits with the issuing bank, unknown BINs refused; card search never returns a number |
 | `lifecycle/` | admins verify, sign the contract, activate with four eyes, suspend, restore, terminate; history and refused moves |
 
@@ -33,6 +33,7 @@ Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/eco
 ./run.sh payments/links.js
 ./run.sh payments/returns.js
 ./run.sh payments/reports.js
+./run.sh payments/limits.js
 ```
 
 Admin calls use Keycloak tokens for `aziz` and `malika` (local password from `ADMIN_PASSWORD`, default `local-only`).

@@ -1,6 +1,6 @@
 # ecom-k6-testing
 
-Scenarios run against the system under load from [ecom-infra](https://github.com/khakimjanovich/ecom-infra) (`load/docker-compose.yml`): the app and its services, each limited like the target server (1 CPU, 2 GB RAM, 256 GB SSD). k6 joins that stack's Docker network and calls the app at http://app:8080, so no host port forwarding sits in the numbers: they measure the code, not the laptop. `BASE_URL` points elsewhere if needed.
+Scenarios run against the system under load from [ecom-infra](https://github.com/khakimjanovich/ecom-infra) (`load/docker-compose.yml`): the app and its services, each limited like the target server (1 CPU, 2 GB RAM, 256 GB SSD). k6 joins that stack's Docker network and calls the app at http://app:8080, so no host port forwarding sits in the numbers: they measure the code, not the laptop. `BASE_URL` points elsewhere if needed. On ecom-infra's local Kubernetes it is `BASE_URL=http://ecom-k8s-k3s-1:30085`.
 
 Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/ecom). Every new endpoint gets a scenario here.
 

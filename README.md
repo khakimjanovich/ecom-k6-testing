@@ -1,6 +1,6 @@
 # ecom-k6-testing
 
-Scenarios run against the system under load from [ecom-infra](https://github.com/khakimjanovich/ecom-infra) (`load/docker-compose.yml`): the app and its services, each limited like the target server (1 CPU, 2 GB RAM, 256 GB SSD), on http://localhost:8085. The numbers measure the code, not the laptop. `BASE_URL` points elsewhere if needed.
+Scenarios run against the system under load from [ecom-infra](https://github.com/khakimjanovich/ecom-infra) (`load/docker-compose.yml`): the app and its services, each limited like the target server (1 CPU, 2 GB RAM, 256 GB SSD). k6 joins that stack's Docker network and calls the app at http://app:8080, so no host port forwarding sits in the numbers: they measure the code, not the laptop. `BASE_URL` points elsewhere if needed.
 
 Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/ecom). Every new endpoint gets a scenario here.
 
@@ -12,7 +12,7 @@ Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/eco
 | `sales-points/` | websites: foreign return URLs refused, site check, terms, activation only after a passed check, suspend and restore |
 | `commission/` | two admins agree on fee rules (no self-approval, no overlaps); fast quotes where the sales point rule wins; a fee taking everything is refused |
 | `terminals/` | terminals per website and card: one live route, suspend means no route, revoked MID/TID never reused, every change audited |
-| `payments/` | signed payment requests: created once per Idempotency-Key, replays, old timestamps, forged signatures and reused keys refused; the payment page: card, code and the debit (paid with the fee fixed, declined stays declined), wrong codes counted until the page closes; a scheme that doesn't answer: unknown, then settled by the resolution workflow (`silent-scheme.js`, needs Temporal) |
+| `payments/` | signed payment requests: created once per Idempotency-Key, replays, old timestamps, forged signatures and reused keys refused; the payment page: card, code and the debit (paid with the fee fixed, declined stays declined), wrong codes counted until the page closes; a scheme that doesn't answer: unknown, then settled by the resolution workflow (`silent-scheme.js`, needs Temporal); every finished payment reaches the website's webhook, signed, and a webhook URL off the website is refused (`webhooks.js`, needs Kafka) |
 | `cards/` | BIN registry: sync from both schemes, lookup by first digits with the issuing bank, unknown BINs refused; card search never returns a number |
 | `lifecycle/` | admins verify, sign the contract, activate with four eyes, suspend, restore, terminate; history and refused moves |
 
@@ -27,13 +27,14 @@ Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/eco
 ./run.sh terminals/register-and-route.js
 ./run.sh cards/bins-and-vault.js
 ./run.sh payments/create-payment.js
+./run.sh payments/hosted-page.js
+./run.sh payments/silent-scheme.js
+./run.sh payments/webhooks.js
 ```
 
 Admin calls use Keycloak tokens for `aziz` and `malika` (local password from `ADMIN_PASSWORD`, default `local-only`).
 Each script has thresholds: a run fails if latency or error rate goes past them.
 Once the observability stack is in place, results also go to Prometheus and Grafana next to the app's own metrics.
-
-**On macOS with Docker Desktop**, a run can show a few failed checks with status `0` and `dial: i/o timeout`: the k6 container could not open a connection through Docker Desktop's port forwarding, so the request never reached the app. Each one also stalls that virtual user for 30 seconds. They are rare (a few per ten thousand) and stay under the thresholds; on Linux they don't happen.
 
 ## Baselines
 

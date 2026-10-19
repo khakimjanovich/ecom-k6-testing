@@ -48,16 +48,15 @@ export default function (adminTokens) {
   verifyEmail(email);
 
   check(admin(`${id}/activation-requests`, 'aziz'), { 'cannot ask before approval (409)': (r) => r.status === 409 && r.json('code') === 'PARTNER_INVALID_TRANSITION' });
-  check(admin(`${id}/verify`, 'aziz'), { 'verified, waiting for contract': movedTo('WAITING_CONTRACT') });
-  check(admin(`${id}/contract`, 'aziz', { contractNumber: `HP-${id}` }), { 'contract approves': (r) => movedTo('APPROVED')(r) && r.json('contractNumber') === `HP-${id}` });
-  check(admin(`${id}/activation-requests`, 'aziz'), { 'no activation before KYB (409)': (r) => r.status === 409 && r.json('code') === 'PARTNER_KYB_INCOMPLETE' });
-
+  check(admin(`${id}/verify`, 'aziz'), { 'no approval before KYB (409)': (r) => r.status === 409 && r.json('code') === 'PARTNER_KYB_INCOMPLETE' });
   const partner = login(email, PARTNER_PASSWORD);
   for (const type of ['CHARTER', 'PASSPORT']) {
     const uploaded = uploadDocument(partner, type);
     check(uploaded, { 'document uploaded (201)': (r) => r.status === 201 && r.json('status') === 'UPLOADED' && r.json('contentType') === 'application/pdf' });
     check(admin(`${id}/documents/${uploaded.json('id')}/verify`, 'malika'), { 'document verified': movedTo('VERIFIED') });
   }
+  check(admin(`${id}/verify`, 'aziz'), { 'verified, waiting for contract': movedTo('WAITING_CONTRACT') });
+  check(admin(`${id}/contract`, 'aziz', { contractNumber: `HP-${id}` }), { 'contract approves': (r) => movedTo('APPROVED')(r) && r.json('contractNumber') === `HP-${id}` });
   const asked = admin(`${id}/activation-requests`, 'aziz');
   check(asked, { 'activation requested (201)': (r) => r.status === 201 && r.json('status') === 'PENDING' });
   check(admin(`${id}/activation-requests`, 'malika'), { 'one waiting request (409)': (r) => r.status === 409 && r.json('code') === 'ACTIVATION_REQUEST_PENDING' });

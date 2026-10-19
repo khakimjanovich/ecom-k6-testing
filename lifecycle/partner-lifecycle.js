@@ -2,9 +2,9 @@
 // Activation needs four eyes: aziz asks, malika approves. Each admin is known from their Keycloak token.
 import http from 'k6/http';
 import { check } from 'k6';
-import { ADMIN_PASSWORD, BASE_URL } from '../lib/config.js';
+import { ADMIN_PASSWORD, BASE_URL, PARTNER_PASSWORD } from '../lib/config.js';
 import { bearer, login } from '../lib/auth.js';
-import { signUp, verifyEmail } from '../lib/onboarding.js';
+import { signUp, uploadDocument, verifyEmail } from '../lib/onboarding.js';
 
 export const options = {
   vus: 5,
@@ -50,6 +50,14 @@ export default function (adminTokens) {
   check(admin(`${id}/activation-requests`, 'aziz'), { 'cannot ask before approval (409)': (r) => r.status === 409 && r.json('code') === 'PARTNER_INVALID_TRANSITION' });
   check(admin(`${id}/verify`, 'aziz'), { 'verified, waiting for contract': movedTo('WAITING_CONTRACT') });
   check(admin(`${id}/contract`, 'aziz', { contractNumber: `HP-${id}` }), { 'contract approves': (r) => movedTo('APPROVED')(r) && r.json('contractNumber') === `HP-${id}` });
+  check(admin(`${id}/activation-requests`, 'aziz'), { 'no activation before KYB (409)': (r) => r.status === 409 && r.json('code') === 'PARTNER_KYB_INCOMPLETE' });
+
+  const partner = login(email, PARTNER_PASSWORD);
+  for (const type of ['CHARTER', 'PASSPORT']) {
+    const uploaded = uploadDocument(partner, type);
+    check(uploaded, { 'document uploaded (201)': (r) => r.status === 201 && r.json('status') === 'UPLOADED' && r.json('contentType') === 'application/pdf' });
+    check(admin(`${id}/documents/${uploaded.json('id')}/verify`, 'malika'), { 'document verified': movedTo('VERIFIED') });
+  }
   const asked = admin(`${id}/activation-requests`, 'aziz');
   check(asked, { 'activation requested (201)': (r) => r.status === 201 && r.json('status') === 'PENDING' });
   check(admin(`${id}/activation-requests`, 'malika'), { 'one waiting request (409)': (r) => r.status === 409 && r.json('code') === 'ACTIVATION_REQUEST_PENDING' });

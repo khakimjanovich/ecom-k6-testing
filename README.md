@@ -1,5 +1,7 @@
 # ecom-k6-testing
 
+Scenarios run against the system under load from [ecom-infra](https://github.com/khakimjanovich/ecom-infra) (`load/docker-compose.yml`): the app and its services, each limited like the target server (1 CPU, 2 GB RAM, 256 GB SSD), on http://localhost:8085. The numbers measure the code, not the laptop. `BASE_URL` points elsewhere if needed.
+
 Grafana k6 load and smoke tests for [ecom](https://github.com/khakimjanovich/ecom). Every new endpoint gets a scenario here.
 
 | Folder | What it proves |

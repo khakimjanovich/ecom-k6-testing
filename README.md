@@ -75,3 +75,7 @@ docker compose -f ../ecom-infra/docker-compose.yml exec -e VAULT_ADDR=http://127
 ```
 
 Run 1 → 7 in order; the card and code default to the sandbox's approving test card. From the command line: `postman collection run postman/ecom-s2s-payment.postman_collection.json -e postman/ecom-local.postman_environment.json --env-var clientId=… --env-var clientSecret=… --env-var signingKey=… --env-var salesPointId=… --env-var returnUrl=…`.
+
+## Postman: the Uzcard adapter on its own
+
+`postman/uzcard-adapter.postman_collection.json` calls the Uzcard adapter (port 8091) directly, with `postman/uzcard-adapter-local.postman_environment.json`: BIN list, send a binding code, verify it (card token), debit by token through the MID/TID, find a payment by its ext, and reverse. Run step 1 first: it proves the address and credentials without moving money. Steps 2–6 need a test card from Uzcard (its number starts with a BIN from step 1) and the code from its phone.

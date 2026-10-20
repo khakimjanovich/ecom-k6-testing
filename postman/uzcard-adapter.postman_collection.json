@@ -1,0 +1,308 @@
+{
+  "info": {
+    "name": "ecom \u00b7 Uzcard adapter",
+    "description": "The Uzcard adapter on its own (port 8091): its REST in front of Uzcard's SV-Gate JSON-RPC API. No login: the adapter is internal and holds Uzcard's credentials itself (uzcard.client.* in its application.yaml, or UZCARD_URL / UZCARD_USERNAME / UZCARD_PASSWORD).\n\nRun 1 first: it proves the address and credentials without moving money. Steps 2 \u2192 6 need a real test card from Uzcard whose number starts with one of the BINs from step 1, and its code from the phone.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "otpId",
+      "value": ""
+    },
+    {
+      "key": "cardToken",
+      "value": ""
+    },
+    {
+      "key": "ext",
+      "value": ""
+    },
+    {
+      "key": "tranId",
+      "value": ""
+    },
+    {
+      "key": "keepExt",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. BIN list",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{adapterUrl}}/v1/cards/bin-list",
+          "host": [
+            "{{adapterUrl}}"
+          ],
+          "path": [
+            "v1",
+            "cards",
+            "bin-list"
+          ]
+        },
+        "description": "Uzcard's BIN ranges (get.bin.list). The safe first call: it proves the address and the credentials, and moves no money."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "console.log('HTTP', pm.response.code, '| status:', r.status, '| requestId:', r.requestId);",
+              "pm.test('Uzcard answered', () => pm.expect(r.status).to.eql('SUCCESS'));",
+              "console.log((r.data || []).length, 'BIN ranges:', JSON.stringify(r.data));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Send binding code",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{adapterUrl}}/v1/cards/new-otp",
+          "host": [
+            "{{adapterUrl}}"
+          ],
+          "path": [
+            "v1",
+            "cards",
+            "new-otp"
+          ]
+        },
+        "description": "cards.new.otp: Uzcard sends a one-time code to the cardholder's phone. Expiry is YYMM. Saves otpId.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pan\": \"{{cardNumber}}\",\n  \"expiry\": \"{{cardExpiry}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "console.log('HTTP', pm.response.code, '| status:', r.status, '| requestId:', r.requestId);",
+              "pm.test('a code was sent', () => pm.expect(r.status).to.eql('SUCCESS'));",
+              "if (r.data) pm.collectionVariables.set('otpId', r.data.otpId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Verify code \u2192 card token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{adapterUrl}}/v1/cards/new-verify",
+          "host": [
+            "{{adapterUrl}}"
+          ],
+          "path": [
+            "v1",
+            "cards",
+            "new-verify"
+          ]
+        },
+        "description": "cards.new.verify: the code from the phone gives Uzcard's token for the card. Saves cardToken; debits use it instead of the number.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"otpId\": \"{{otpId}}\",\n  \"code\": \"{{otpCode}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "console.log('HTTP', pm.response.code, '| status:', r.status, '| requestId:', r.requestId);",
+              "pm.test('the card is bound', () => pm.expect(r.status).to.eql('SUCCESS'));",
+              "if (r.data) pm.collectionVariables.set('cardToken', r.data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Debit (pay purpose)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{adapterUrl}}/v1/trans/pay-purpose",
+          "host": [
+            "{{adapterUrl}}"
+          ],
+          "path": [
+            "v1",
+            "trans",
+            "pay-purpose"
+          ]
+        },
+        "description": "trans.pay.purpose: takes the money in one step through the e-POS terminal (MID/TID). Amount in tiyin. A 504 means no answer: unknown, never declined; ask with step 5.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cardToken\": \"{{cardToken}}\",\n  \"amount\": {{amount}},\n  \"ext\": \"{{ext}}\",\n  \"merchantId\": \"{{merchantId}}\",\n  \"terminalId\": \"{{terminalId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// A new ext (our payment id) per debit. Send this request again unchanged to see the same ext",
+              "// looked up, not paid twice.",
+              "if (!pm.collectionVariables.get('keepExt')) pm.collectionVariables.set('ext', 'pm-' + Date.now());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "console.log('HTTP', pm.response.code, '| status:', r.status, '| requestId:', r.requestId);",
+              "pm.test('an answer', () => pm.expect(r.status).to.be.oneOf(['SUCCESS', 'DECLINED']));",
+              "if (r.data) { pm.collectionVariables.set('tranId', r.data.tranId); console.log(JSON.stringify(r.data)); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Find by ext",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{adapterUrl}}/v1/trans/ext",
+          "host": [
+            "{{adapterUrl}}"
+          ],
+          "path": [
+            "v1",
+            "trans",
+            "ext"
+          ]
+        },
+        "description": "trans.ext: what Uzcard knows about our payment id. SUCCESS with the transaction, or NOT_FOUND if it never arrived.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ext\": \"{{ext}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "console.log('HTTP', pm.response.code, '| status:', r.status, '| requestId:', r.requestId);",
+              "console.log(JSON.stringify(r.data));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Reverse",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{adapterUrl}}/v1/trans/reverse",
+          "host": [
+            "{{adapterUrl}}"
+          ],
+          "path": [
+            "v1",
+            "trans",
+            "reverse"
+          ]
+        },
+        "description": "trans.reverse: gives the whole debit back (before or after settlement, the same call at Uzcard).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tranId\": \"{{tranId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "console.log('HTTP', pm.response.code, '| status:', r.status, '| requestId:', r.requestId);",
+              "console.log(JSON.stringify(r.data));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

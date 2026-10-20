@@ -1,5 +1,5 @@
 // The website takes webhooks: every finished payment is POSTed to it once it is paid or declined,
-// signed with the client's key over POST, the path, X-Timestamp, X-Event-Id and the body's SHA-256.
+// signed the Standard Webhooks way: "v1," + base64 HMAC-SHA256 of "webhook-id.webhook-timestamp.body".
 // The processing sandbox plays the merchant's endpoint; its request journal shows what arrived.
 import http from 'k6/http';
 import crypto from 'k6/crypto';
@@ -62,11 +62,11 @@ export default function ({ shop, token }) {
     hook = received(created.json('id'));
   }
   const headers = hook ? hook.headers : {};
-  const text = hook ? ['POST', HOOK_PATH, headers['X-Timestamp'], headers['X-Event-Id'], crypto.sha256(hook.body, 'hex')].join('\n') : '';
+  const text = hook ? `${headers['webhook-id']}.${headers['webhook-timestamp']}.${hook.body}` : '';
   check(hook, {
     'the merchant hears how the payment ended': (h) => h !== null && JSON.parse(h.body).status === (declined ? 'DECLINED' : 'PAID'),
     'the webhook is signed with the client key': (h) =>
-      h !== null && headers['X-Signature'] === crypto.hmac('sha256', encoding.b64decode(shop.client.signingKey), text, 'base64'),
-    'it names its event, so repeats can be dropped': (h) => h !== null && headers['X-Event-Id'] === JSON.parse(h.body).eventId,
+      h !== null && headers['webhook-signature'] === `v1,${crypto.hmac('sha256', encoding.b64decode(shop.client.signingKey), text, 'base64')}`,
+    'it names its event, so repeats can be dropped': (h) => h !== null && headers['webhook-id'] === JSON.parse(h.body).eventId,
   });
 }

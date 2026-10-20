@@ -1,0 +1,366 @@
+{
+  "info": {
+    "name": "ecom \u00b7 S2S payment",
+    "description": "A merchant server creating and checking a payment, and the buyer paying on the hosted page.\n\nSetup: import the environment `ecom-local.postman_environment.json`, fill clientId, clientSecret, signingKey and salesPointId (from the portal), and put the same signingKey into Vault:\n\ndocker compose -f ecom-infra/docker-compose.yml exec -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN=local-only vault vault kv put secret/merchants/<clientId> signingKey=<signingKey>\n\nThen run 1 \u2192 7 in order.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// RFC 9421 HTTP Message Signature (hmac-sha256) for every merchant call to /api/v1/payments.",
+          "// The signature covers the method, the full URI, the token and, with a body, its Content-Digest (RFC 9530).",
+          "const path = pm.request.url.getPath();",
+          "if (!path.startsWith('/api/v1/payments')) return;",
+          "",
+          "const method = pm.request.method;",
+          "const uri = pm.variables.replaceIn(pm.request.url.toString());",
+          "const authorization = 'Bearer ' + pm.variables.get('accessToken');",
+          "const body = pm.request.body && pm.request.body.raw ? pm.variables.replaceIn(pm.request.body.raw) : '';",
+          "const created = Math.floor(Date.now() / 1000);",
+          "const nonce = pm.variables.replaceIn('{{$guid}}');",
+          "const keyid = pm.variables.get('clientId');",
+          "",
+          "const components = ['\"@method\"', '\"@target-uri\"', '\"authorization\"'];",
+          "const lines = [`\"@method\": ${method}`, `\"@target-uri\": ${uri}`, `\"authorization\": ${authorization}`];",
+          "if (body) {",
+          "  const digest = `sha-256=:${CryptoJS.SHA256(body).toString(CryptoJS.enc.Base64)}:`;",
+          "  components.push('\"content-digest\"');",
+          "  lines.push(`\"content-digest\": ${digest}`);",
+          "  pm.request.headers.upsert({ key: 'Content-Digest', value: digest });",
+          "}",
+          "const params = `(${components.join(' ')});created=${created};nonce=\"${nonce}\";keyid=\"${keyid}\";alg=\"hmac-sha256\"`;",
+          "lines.push(`\"@signature-params\": ${params}`);",
+          "const key = CryptoJS.enc.Base64.parse(pm.variables.get('signingKey'));",
+          "const signature = CryptoJS.HmacSHA256(lines.join('\\n'), key).toString(CryptoJS.enc.Base64);",
+          "",
+          "pm.request.headers.upsert({ key: 'Authorization', value: authorization });",
+          "pm.request.headers.upsert({ key: 'Signature-Input', value: `sig1=${params}` });",
+          "pm.request.headers.upsert({ key: 'Signature', value: `sig1=:${signature}:` });"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "idempotencyKey",
+      "value": ""
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "pageToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Token (client credentials)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{keycloakUrl}}/realms/ecom/protocol/openid-connect/token",
+          "host": [
+            "{{keycloakUrl}}"
+          ],
+          "path": [
+            "realms",
+            "ecom",
+            "protocol",
+            "openid-connect",
+            "token"
+          ]
+        },
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "client_credentials"
+            },
+            {
+              "key": "client_id",
+              "value": "{{clientId}}"
+            },
+            {
+              "key": "client_secret",
+              "value": "{{clientSecret}}"
+            }
+          ]
+        },
+        "description": "The merchant server's access token from its API client. It carries the merchant role and the client id (azp)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('a token', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('accessToken', pm.response.json().access_token);",
+              "// A new order and idempotency key for the payment that follows (set here: the collection script",
+              "// signs the body before a request's own pre-request script runs).",
+              "pm.collectionVariables.set('orderId', 'pm-' + Date.now());",
+              "pm.collectionVariables.set('idempotencyKey', 'pm-' + Date.now());"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Create payment (signed)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotencyKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments"
+          ]
+        },
+        "description": "Signed with RFC 9421 by the collection's pre-request script. Returns the payment and its one-time page link.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"salesPointId\": \"{{salesPointId}}\",\n  \"orderId\": \"{{orderId}}\",\n  \"amount\": {{amount}},\n  \"description\": \"Postman test\",\n  \"returnUrl\": \"{{returnUrl}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "if (pm.response.code > 201) { console.log(pm.response.text()); return; }",
+              "const p = pm.response.json();",
+              "pm.collectionVariables.set('paymentId', p.id);",
+              "pm.collectionVariables.set('pageToken', p.paymentUrl.split('/pay/')[1]);",
+              "console.log('X-Request-Id (trace id):', pm.response.headers.get('X-Request-Id'));",
+              "console.log('Payment page for a browser:', p.paymentUrl);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Payment page (buyer)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/pay/{{pageToken}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "pay",
+            "{{pageToken}}"
+          ]
+        },
+        "description": "What the buyer's browser loads: amount, website, schemes. No login: the token in the link is the credential."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('the page', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Enter card (buyer)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/pay/{{pageToken}}/card",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "pay",
+            "{{pageToken}}",
+            "card"
+          ]
+        },
+        "description": "The card module binds the card at the scheme, which sends a one-time code to the cardholder's phone. Expiry is YYMM.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"number\": \"{{cardNumber}}\",\n  \"expiry\": \"{{cardExpiry}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('a code was sent', () => pm.expect(pm.response.json().status).to.eql('AWAITING_CODE'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Enter code (buyer) \u2192 debit",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/pay/{{pageToken}}/code",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "pay",
+            "{{pageToken}}",
+            "code"
+          ]
+        },
+        "description": "Confirms the card, then the debit goes through the website's e-POS terminal. PAID, DECLINED, or UNKNOWN (Temporal asks again).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"{{otpCode}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('an answer', () => pm.response.to.have.status(200));",
+              "console.log('Status after the debit:', pm.response.json().status);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Get payment (signed)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/payments/{{paymentId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "{{paymentId}}"
+          ]
+        },
+        "description": "The merchant asks how the payment ended. Signed with RFC 9421; no body, so no Content-Digest."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('found', () => pm.response.to.have.status(200));",
+              "console.log('Status:', pm.response.json().status);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Refund or reverse (signed)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/payments/{{paymentId}}/refund",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "{{paymentId}}",
+            "refund"
+          ]
+        },
+        "description": "Gives the whole amount back: a reversal on the day it was paid, a refund later within the website's window."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "console.log('Status:', pm.response.code, pm.response.text());"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

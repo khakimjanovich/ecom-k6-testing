@@ -62,3 +62,16 @@ Measured 2026-10-19 on ecom-infra's load stack (the app at 1 CPU and 2 GB RAM; t
 | `payments/reports.js` | today's CSV (read from the payments; it grows through the run) | 69.0 ms | 90 ms | 36 payments/s, each listed |
 
 On one CPU the JVM's own threads (garbage collection, JIT) compete with requests, so some p95s are bimodal: most requests take 2–4 ms, and a few wait for the next CPU time slice (~70 ms). A cold app right after start is slower until hot code is compiled, so warm it up (e.g. `smoke/health.js`) before measuring.
+
+## Postman: one payment by hand
+
+`postman/ecom-s2s-payment.postman_collection.json` is a merchant server and a buyer: a token (client credentials), a payment created with an RFC 9421 signature (`hmac-sha256`, `Content-Digest`), the hosted page's card and code steps, a signed GET, and a refund. The collection signs every `/api/v1/payments` call itself.
+
+Import it with `postman/ecom-local.postman_environment.json`, then fill `clientId`, `clientSecret` and `salesPointId` from the portal, and a `signingKey` that is also in Vault:
+
+```bash
+openssl rand -base64 32
+docker compose -f ../ecom-infra/docker-compose.yml exec -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN=local-only vault vault kv put secret/merchants/<clientId> signingKey=<that key>
+```
+
+Run 1 → 7 in order; the card and code default to the sandbox's approving test card. From the command line: `postman collection run postman/ecom-s2s-payment.postman_collection.json -e postman/ecom-local.postman_environment.json --env-var clientId=… --env-var clientSecret=… --env-var signingKey=… --env-var salesPointId=… --env-var returnUrl=…`.
